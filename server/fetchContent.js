@@ -19,7 +19,7 @@ export default function fetchContent(url, ws) {
 	let progress = 0;
 
 	for (let i = 0; i < threads; i++) {
-		const worker = new Worker('./downloadWorker.js', { workerData: { url, speedLimit } });
+		const worker = new Worker(resolve(__dirname, './downloadWorker.js'), { workerData: { url, speedLimit } });
 
 		worker.on('message', (data) => {
       const { chunkSize, totalSize } = data;

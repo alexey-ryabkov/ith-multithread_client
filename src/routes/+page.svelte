@@ -1,65 +1,154 @@
 <script>
 	import { onMount } from 'svelte';
-	import { writable } from 'svelte/store';
+	import { writable, get } from 'svelte/store';
+	import { ListBox, ListBoxItem, ProgressRadial } from '@skeletonlabs/skeleton';
+	import { focusTrap } from '@skeletonlabs/skeleton';
+	import Preloader from '$lib/components/Preloader.svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import { formatBytes } from '$lib/utils';
+
+	const downloadedUrls = writable([
+		// 'https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg'
+	]);
+	const keywordUrls = writable([
+		// 'https://images.wallpaperscraft.ru/image/single/mlechnyj_put_zvezdnoe_nebo_zvezdy_128523_1280x720.jpg',
+		// 'https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg'
+	]);
 
 	let keyword = '';
-
-	/*
-	 * @type {Writable<string[]>}
-	 */
-	let urls = writable([]);
+	let keywordOfLoadedURLs = '';
 	let selectedUrl = '';
 	let status = '';
-	let downloadedContent = '';
+	let progress = 0;
+	let totalSize = 0;
+	let threads = 0;
+	let progressPercent = 0;
+	let isUrlsLoading = false;
+	let isContentLoaded = false;
+	let isContentDownloading = false;
 
-	/**
-	 * @type {WebSocket}
-	 */
+	$: status = totalSize ? `Downloaded: ${formatBytes(progress)} of ${formatBytes(totalSize)} with ${threads} threads` : '';
+	$: progressPercent = totalSize ? Math.round((progress / totalSize) * 100) : 0;
+	$: isContentLoaded = progressPercent == 100;
+
+	// let isFocused = false;
+	// use:focusTrap={isFocused}
+
 	let ws;
 	onMount(() => {
 		ws = new WebSocket('ws://localhost:8080');
 
-		ws.onmessage = (event) => {
-			// TODO тут нужен try-catch 
-			const data = JSON.parse(event.data);
-			if (data.urls) {
-				urls.set(data.urls);
-			} else if (data.progress !== undefined) {
-				status = `Downloaded: ${data.progress} / ${data.totalSize} bytes with ${data.threads} threads`;
-			} else if (data.error) {
-				console.error(data.error);
-				// TODO пользователю не показываем детали ошибки, а выводим в консоль 
+		ws.onmessage = ({ data: rawData }) => {
+			// TODO тут нужен try-catch
+			const data = JSON.parse(rawData);
+			const { urls, error = null } = data;
+			({ progress = 0, totalSize = 0, threads = 0 } = data);
+			if (urls) {
+				keywordUrls.set(urls);
+				keywordOfLoadedURLs = keyword;
+				isUrlsLoading = false;
+			} else if (progress) {
+				// console.log(progress, totalSize);
+				if (progress == totalSize) {
+					isContentDownloading = false;
+					downloadedUrls.set([selectedUrl, ...$downloadedUrls]);
+				} 
+			} else if (error) {
+				console.error(error);
+				// TODO toast c ошибкой для пользователя
 			}
 		};
 	});
 
-	function search() {
+	function loadUrls() {
 		ws.send(JSON.stringify({ keyword }));
+		isUrlsLoading = true;
+		selectedUrl = status = '';
+		keywordOfLoadedURLs = '';
+		progress = totalSize = threads = 0;
 	}
 
-	/**
-	 * @param {string} url
-	 */
-	function download(url) {
+	function downloadContent(url) {
 		ws.send(JSON.stringify({ url }));
+		isContentDownloading = true;
+		// isContentLoaded = false;
+		status = '';
+		progress = totalSize = threads = 0;
 	}
 </script>
+
 <main class="container h-full mx-auto flex justify-center items-center">
 	<div class="space-y-5">
-		<h1 class="h1">Multithreaded http-client!</h1>
-		<input
-			type="text"
-			bind:value={keyword}
-			placeholder="Enter keyword"
-			class="input input-bordered"
-		/>
-		<button on:click={search} class="btn btn-primary ml-2">Search</button>
-		<ul class="list-disc ml-6 mt-4">
-			{#each $urls as url}
+		<h1 class="gradient-heading">
+			HTTP<br />
+			multithread<br />
+			client
+		</h1>
+		<!-- <p>Enter keyword, for example <a href="#science">science</a></p> -->
+		<!-- {#if !isFocused}
+		<p>Enter keyword to show content URLs list:</p>
+		{/if} -->
+		<form class="input-group input-group-divider grid-cols-[1fr_auto]">
+			<input
+				bind:value={keyword}
+				disabled={isUrlsLoading || isContentDownloading}
+				type="text"
+				placeholder="Content URLs keyword"
+			/>
+			<button
+				on:click={loadUrls}
+				disabled={isUrlsLoading || isContentDownloading}
+				class="btn variant-filled-primary"
+			>
+				{#if isUrlsLoading}
+					<Preloader name="tubeSpinner" class="mr-1" />
+				{/if}
+				show
+			</button>
+		</form>
+
+		{#if $keywordUrls.length && !isUrlsLoading}
+			<p>URLs list for <span class="font-bold">{keywordOfLoadedURLs}</span> keyword:</p>
+			<ListBox disabled={isContentDownloading}>
+				{#each $keywordUrls as url}
+					{@const isUrlDownloaded = $downloadedUrls.includes(url)}
+					<ListBoxItem
+						on:click={() => downloadContent(url)}
+						bind:group={selectedUrl}
+						name="urls"
+						value={url}
+						disabled={isUrlDownloaded}
+					>
+						<svelte:fragment slot="lead">
+							{#if !isUrlDownloaded}
+								<Icon name="download" size={20} />
+							{:else}
+								<Icon name="check" size={20} class="text-success-500" />
+							{/if}
+						</svelte:fragment>
+						{url}
+					</ListBoxItem>
+					<!-- <li on:click={() => download(url)} class="cursor-pointer hover:underline">{url}</li> -->
+				{/each}
+			</ListBox>
+		{/if}
+		<!-- <ul class="list-disc ml-6 mt-4">
+			{#each $urlStore as url}
 				<li on:click={() => download(url)} class="cursor-pointer hover:underline">{url}</li>
 			{/each}
-		</ul>
-		<div class="mt-4">{status}</div>
-		<div class="mt-4">{downloadedContent}</div>
+		</ul> -->
+		{#if isContentDownloading || status}
+			<ProgressRadial value={progressPercent} font={100}>{progressPercent}%</ProgressRadial>
+			<p>{status}</p>
+		{/if}
 	</div>
 </main>
+
+<style>
+	.gradient-heading {
+		@apply h1 font-sans text-center;
+		@apply bg-clip-text text-transparent box-decoration-clone;
+		@apply bg-gradient-to-br;
+		@apply from-primary-500 via-violet-500 to-secondary-500;
+	}
+</style>

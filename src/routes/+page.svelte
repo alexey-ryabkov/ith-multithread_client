@@ -1,15 +1,20 @@
 <script>
 	import { onMount } from 'svelte';
-	import { writable, get } from 'svelte/store';
+	import { writable } from 'svelte/store';
 	import { ListBox, ListBoxItem, ProgressRadial } from '@skeletonlabs/skeleton';
-	import { focusTrap } from '@skeletonlabs/skeleton';
 	import Preloader from '$lib/components/Preloader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import ContentStorage from '$lib/ContentStorage';
 	import { formatBytes } from '$lib/utils';
 
+	/**
+	 * @typedef {import('svelte/store').Writable<string[]>} Writable
+	 */
+	/** @type Writable */
 	const downloadedUrls = writable([
 		// 'https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg'
 	]);
+	/** @type Writable */
 	const keywordUrls = writable([
 		// 'https://images.wallpaperscraft.ru/image/single/mlechnyj_put_zvezdnoe_nebo_zvezdy_128523_1280x720.jpg',
 		// 'https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg'
@@ -24,35 +29,47 @@
 	let threads = 0;
 	let progressPercent = 0;
 	let isUrlsLoading = false;
-	let isContentLoaded = false;
 	let isContentDownloading = false;
 
-	$: status = totalSize ? `Downloaded: ${formatBytes(progress)} of ${formatBytes(totalSize)} with ${threads} threads` : '';
+	$: status = totalSize
+		? `Downloaded: ${formatBytes(progress)} of ${formatBytes(totalSize)} with ${threads} threads`
+		: '';
 	$: progressPercent = totalSize ? Math.round((progress / totalSize) * 100) : 0;
-	$: isContentLoaded = progressPercent == 100;
 
-	// let isFocused = false;
-	// use:focusTrap={isFocused}
-
+	/** @type {WebSocket} */
 	let ws;
-	onMount(() => {
-		ws = new WebSocket('ws://localhost:8080');
+	/** @type {ContentStorage} */
+	let contentStorage;
+	/** @type {(Uint8Array|string)[]} */
+	let contentChunks = [];
 
+	onMount(() => {
+		contentStorage = ContentStorage.instance;
+		downloadedUrls.set(contentStorage.keys);
+
+		// FIXME убрать после отладки
+		// @ts-ignore
+		window.app = contentStorage;
+
+		ws = new WebSocket('ws://localhost:8080');
 		ws.onmessage = ({ data: rawData }) => {
 			// TODO тут нужен try-catch
 			const data = JSON.parse(rawData);
-			const { urls, error = null } = data;
+			const { chunk, urls, error = null } = data;
 			({ progress = 0, totalSize = 0, threads = 0 } = data);
 			if (urls) {
 				keywordUrls.set(urls);
 				keywordOfLoadedURLs = keyword;
 				isUrlsLoading = false;
 			} else if (progress) {
-				// console.log(progress, totalSize);
+				contentChunks.push(chunk);
 				if (progress == totalSize) {
-					isContentDownloading = false;
-					downloadedUrls.set([selectedUrl, ...$downloadedUrls]);
-				} 
+					contentStorage.save(selectedUrl, new Blob(contentChunks)).then(() => {
+						contentChunks = [];
+						isContentDownloading = false;
+						downloadedUrls.update((current) => [...current, selectedUrl]);
+					});
+				}
 			} else if (error) {
 				console.error(error);
 				// TODO toast c ошибкой для пользователя
@@ -68,10 +85,12 @@
 		progress = totalSize = threads = 0;
 	}
 
+	/**
+	 * @param {string} url
+	 */
 	function downloadContent(url) {
 		ws.send(JSON.stringify({ url }));
 		isContentDownloading = true;
-		// isContentLoaded = false;
 		status = '';
 		progress = totalSize = threads = 0;
 	}
@@ -85,9 +104,6 @@
 			client
 		</h1>
 		<!-- <p>Enter keyword, for example <a href="#science">science</a></p> -->
-		<!-- {#if !isFocused}
-		<p>Enter keyword to show content URLs list:</p>
-		{/if} -->
 		<form class="input-group input-group-divider grid-cols-[1fr_auto]">
 			<input
 				bind:value={keyword}
@@ -132,11 +148,6 @@
 				{/each}
 			</ListBox>
 		{/if}
-		<!-- <ul class="list-disc ml-6 mt-4">
-			{#each $urlStore as url}
-				<li on:click={() => download(url)} class="cursor-pointer hover:underline">{url}</li>
-			{/each}
-		</ul> -->
 		{#if isContentDownloading || status}
 			<ProgressRadial value={progressPercent} font={100}>{progressPercent}%</ProgressRadial>
 			<p>{status}</p>

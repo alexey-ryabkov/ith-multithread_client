@@ -1,10 +1,27 @@
 {
 	"city": [
 		"https://images.wallpaperscraft.ru/image/single/nochnoj_gorod_vid_sverhu_ogni_goroda_134887_1280x720.jpg",
-		"https://images.wallpaperscraft.ru/image/single/gorod_vid_sverhu_doroga_156925_1280x720.jpg"
+		"https://images.wallpaperscraft.ru/image/single/gorod_vid_sverhu_doroga_156925_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/gorod_vecher_snegopad_136478_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/trollejbus_ostanovka_gorod_119292_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/nochnoj_gorod_ogni_goroda_obzor_129026_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/ulitsa_zakat_palmy_122106_1280x720.jpg"
 	],
-	"science": [
+	"cosmos": [
 		"https://images.wallpaperscraft.ru/image/single/mlechnyj_put_zvezdnoe_nebo_zvezdy_128523_1280x720.jpg",
-		"https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg"
+		"https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/kosmos_planety_vzlet_96455_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/zvezdy_svechenie_kosmos_1204806_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/mlechnyj_put_zvezdy_temnyj_1204726_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/zvezdnoe_nebo_mlechnyj_put_zvezdy_118653_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/zvezdy_liudi_planeta_105693_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/zvezdnoe_nebo_mlechnyj_put_zvezdy_118495_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/pluton_planeta_karlikovaia_planeta_97479_1280x720.jpg"
+	],
+	"animal": [
+		"https://images.wallpaperscraft.ru/image/single/oleni_trava_listia_59721_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/tigr_dikaia_koshka_temnyj_fon_74419_1280x720.jpg",
+		"https://images.wallpaperscraft.ru/image/single/kotenok_kot_trava_123220_1280x720.jpg"
 	]
 }

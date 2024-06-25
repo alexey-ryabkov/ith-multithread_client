@@ -8,9 +8,6 @@ import axios from 'axios';
 		threadNum,
 		range: { from, to }
 	} = workerData;
-
-	console.log(`load thread ${threadNum}, range ${from}-${to}`);
-
 	const response = await axios({
 		url,
 		method: 'GET',
@@ -30,24 +27,18 @@ import axios from 'axios';
 		const chunkSize = chunk.length;
 		downloadedSize += chunkSize;
 
-		parentPort.postMessage({ threadNum, chunkSize, downloadedSize });
+		parentPort?.postMessage({ chunk, chunkSize, threadNum, downloadedSize });
 
 		const loadSleepTime = speedLimit > 0 ? (1000 / speedLimit) * chunkSize - loadElapsedTime : 0;
 		if (loadSleepTime > 0) {
 			response.data.pause();
 			setTimeout(() => response.data.resume(), loadSleepTime);
 		}
-
-		console.log(
-			`in thread ${threadNum}: chunk ${chunkSize}, downloaded ${downloadedSize}, sleep time ${loadSleepTime}, elapsed time ${loadElapsedTime}`
-		);
-
-		// TODO по завершении передавать данные
 	});
 	response.data.on('end', () => {
-		parentPort.close();
+		parentPort?.close();
 	});
-	response.data.on('error', (err) => {
-		parentPort.postMessage({ threadNum, error: err?.message || err });
+	response.data.on('error', (/** @type {unknown} */ err) => {
+		parentPort?.postMessage({ threadNum, error: err instanceof Error ? err.message : err });
 	});
 })();

@@ -42,6 +42,7 @@ export default async function fetchContent(url, ws) {
 				ws.send(
 					JSON.stringify({
 						chunk,
+						threadNum, 
 						progress,
 						totalSize,
 						threads: threadsCnt

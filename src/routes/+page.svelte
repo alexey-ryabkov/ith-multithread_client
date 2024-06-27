@@ -33,33 +33,37 @@
 			? 'Downloading starts'
 			: '';
 	$: progressPercent = totalSize ? Math.round((progress / totalSize) * 100) : 0;
+	$: contents = $downloadedUrls.map(url => contentStorage.get(url));
 
 	/** @type {WebSocket} */
 	let ws;
 	/** @type {ContentStorage} */
 	let contentStorage;
-	/** @type {(Uint8Array|string)[]} */
+	/** @type {(Uint8Array|string)[][]} */
 	let contentChunks = [];
 
 	onMount(() => {
 		contentStorage = ContentStorage.instance;
-		downloadedUrls.set(contentStorage.keys);
+		downloadedUrls.set(Array.from(contentStorage.keys));
 
 		ws = new WebSocket('ws://localhost:8080');
 		ws.onmessage = ({ data: rawData }) => {
 			// TODO тут нужен try-catch
 			const data = JSON.parse(rawData);
-			const { chunk, urls, error = null } = data;
+			const { urls, chunk, threadNum, error } = data;
 			({ progress = 0, totalSize = 0, threads = 0 } = data);
 			if (urls) {
 				keywordUrls.set(urls);
 				keywordOfLoadedURLs = keyword;
 				isUrlsLoading = false;
 			} else if (progress) {
-				contentChunks.push(new Uint8Array(Object.values(chunk)));
+				if (!contentChunks[threadNum]) {
+					contentChunks[threadNum] = [];
+				}
+				contentChunks[threadNum].push(new Uint8Array(Object.values(chunk)));
 				if (progress == totalSize) {
 					contentStorage
-						.save(selectedUrl, new Blob(contentChunks, { type: 'image/jpeg' }))
+						.save(selectedUrl, new Blob(contentChunks.flat(), { type: 'image/jpeg' }))
 						.then(() => {
 							contentChunks = [];
 							isContentDownloading = false;
@@ -151,9 +155,8 @@
 						<p>{status}</p>
 					{/if}
 				{:else if tabSet === 1}
-					{#if $downloadedUrls.length}
-						{#each $downloadedUrls as url}
-							{@const image = contentStorage.get(url)}
+					{#if contents.length}
+						{#each contents as image}
 							<div class="card">
 								<img src={image} alt="" />
 							</div>

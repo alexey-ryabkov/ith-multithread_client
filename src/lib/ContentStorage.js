@@ -45,7 +45,7 @@ export default class ContentStorage {
 	 * @param {string} key
 	 * @returns {string|null}
 	 */
-	async get(key) { 
+	get(key) { 
     return this._storage.getItem(key);
   }
 	/**

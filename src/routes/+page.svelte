@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { writable } from 'svelte/store';
-	import { ListBox, ListBoxItem, ProgressRadial } from '@skeletonlabs/skeleton';
+	import { ListBox, ListBoxItem, ProgressRadial, Tab, TabGroup } from '@skeletonlabs/skeleton';
 	import Preloader from '$lib/components/Preloader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import ContentStorage from '$lib/ContentStorage';
@@ -11,14 +11,9 @@
 	 * @typedef {import('svelte/store').Writable<string[]>} Writable
 	 */
 	/** @type Writable */
-	const downloadedUrls = writable([
-		// 'https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg'
-	]);
+	const downloadedUrls = writable([]);
 	/** @type Writable */
-	const keywordUrls = writable([
-		// 'https://images.wallpaperscraft.ru/image/single/mlechnyj_put_zvezdnoe_nebo_zvezdy_128523_1280x720.jpg',
-		// 'https://images.wallpaperscraft.ru/image/single/oblaka_zvezdy_tochki_1220600_1280x720.jpg'
-	]);
+	const keywordUrls = writable([]);
 
 	let keyword = '';
 	let keywordOfLoadedURLs = '';
@@ -30,10 +25,13 @@
 	let progressPercent = 0;
 	let isUrlsLoading = false;
 	let isContentDownloading = false;
+	let tabSet = 0;
 
 	$: status = totalSize
 		? `Downloaded: ${formatBytes(progress)} of ${formatBytes(totalSize)} with ${threads} threads`
-		: '';
+		: isContentDownloading
+			? 'Downloading starts'
+			: '';
 	$: progressPercent = totalSize ? Math.round((progress / totalSize) * 100) : 0;
 
 	/** @type {WebSocket} */
@@ -47,10 +45,6 @@
 		contentStorage = ContentStorage.instance;
 		downloadedUrls.set(contentStorage.keys);
 
-		// FIXME убрать после отладки
-		// @ts-ignore
-		window.app = contentStorage;
-
 		ws = new WebSocket('ws://localhost:8080');
 		ws.onmessage = ({ data: rawData }) => {
 			// TODO тут нужен try-catch
@@ -62,13 +56,15 @@
 				keywordOfLoadedURLs = keyword;
 				isUrlsLoading = false;
 			} else if (progress) {
-				contentChunks.push(chunk);
+				contentChunks.push(new Uint8Array(Object.values(chunk)));
 				if (progress == totalSize) {
-					contentStorage.save(selectedUrl, new Blob(contentChunks)).then(() => {
-						contentChunks = [];
-						isContentDownloading = false;
-						downloadedUrls.update((current) => [...current, selectedUrl]);
-					});
+					contentStorage
+						.save(selectedUrl, new Blob(contentChunks, { type: 'image/jpeg' }))
+						.then(() => {
+							contentChunks = [];
+							isContentDownloading = false;
+							downloadedUrls.update((current) => [...current, selectedUrl]);
+						});
 				}
 			} else if (error) {
 				console.error(error);
@@ -84,7 +80,6 @@
 		keywordOfLoadedURLs = '';
 		progress = totalSize = threads = 0;
 	}
-
 	/**
 	 * @param {string} url
 	 */
@@ -103,55 +98,72 @@
 			multithread<br />
 			client
 		</h1>
-		<!-- <p>Enter keyword, for example <a href="#science">science</a></p> -->
-		<form class="input-group input-group-divider grid-cols-[1fr_auto]">
-			<input
-				bind:value={keyword}
-				disabled={isUrlsLoading || isContentDownloading}
-				type="text"
-				placeholder="Content URLs keyword"
-			/>
-			<button
-				on:click={loadUrls}
-				disabled={isUrlsLoading || isContentDownloading}
-				class="btn variant-filled-primary"
-			>
-				{#if isUrlsLoading}
-					<Preloader name="tubeSpinner" class="mr-1" />
-				{/if}
-				show
-			</button>
-		</form>
-
-		{#if $keywordUrls.length && !isUrlsLoading}
-			<p>URLs list for <span class="font-bold">{keywordOfLoadedURLs}</span> keyword:</p>
-			<ListBox disabled={isContentDownloading}>
-				{#each $keywordUrls as url}
-					{@const isUrlDownloaded = $downloadedUrls.includes(url)}
-					<ListBoxItem
-						on:click={() => downloadContent(url)}
-						bind:group={selectedUrl}
-						name="urls"
-						value={url}
-						disabled={isUrlDownloaded}
-					>
-						<svelte:fragment slot="lead">
-							{#if !isUrlDownloaded}
-								<Icon name="download" size={20} />
-							{:else}
-								<Icon name="check" size={20} class="text-success-500" />
+		<TabGroup justify="justify-center">
+			<Tab bind:group={tabSet} name="tab1" value={0}>Choose and Download</Tab>
+			<Tab bind:group={tabSet} name="tab2" value={1}>View content</Tab>
+			<svelte:fragment slot="panel">
+				{#if tabSet === 0}
+					<!-- <p>Enter keyword, for example <a href="#science">science</a></p> -->
+					<form class="input-group input-group-divider grid-cols-[1fr_auto]">
+						<input
+							bind:value={keyword}
+							disabled={isUrlsLoading || isContentDownloading}
+							type="text"
+							placeholder="Content URLs keyword"
+						/>
+						<button
+							on:click={loadUrls}
+							disabled={isUrlsLoading || isContentDownloading}
+							class="btn variant-filled-primary"
+						>
+							{#if isUrlsLoading}
+								<Preloader name="tubeSpinner" class="mr-1" />
 							{/if}
-						</svelte:fragment>
-						{url}
-					</ListBoxItem>
-					<!-- <li on:click={() => download(url)} class="cursor-pointer hover:underline">{url}</li> -->
-				{/each}
-			</ListBox>
-		{/if}
-		{#if isContentDownloading || status}
-			<ProgressRadial value={progressPercent} font={100}>{progressPercent}%</ProgressRadial>
-			<p>{status}</p>
-		{/if}
+							show
+						</button>
+					</form>
+					{#if $keywordUrls.length && !isUrlsLoading}
+						<p>URLs list for <span class="font-bold">{keywordOfLoadedURLs}</span> keyword:</p>
+						<ListBox disabled={isContentDownloading}>
+							{#each $keywordUrls as url}
+								{@const isUrlDownloaded = $downloadedUrls.includes(url)}
+								<ListBoxItem
+									on:click={() => downloadContent(url)}
+									bind:group={selectedUrl}
+									name="urls"
+									value={url}
+									disabled={isUrlDownloaded}
+								>
+									<svelte:fragment slot="lead">
+										{#if !isUrlDownloaded}
+											<Icon name="download" size={20} />
+										{:else}
+											<Icon name="check" size={20} class="text-success-500" />
+										{/if}
+									</svelte:fragment>
+									{url}
+								</ListBoxItem>
+							{/each}
+						</ListBox>
+					{/if}
+					{#if isContentDownloading || status}
+						<ProgressRadial value={progressPercent} font={100}>{progressPercent}%</ProgressRadial>
+						<p>{status}</p>
+					{/if}
+				{:else if tabSet === 1}
+					{#if $downloadedUrls.length}
+						{#each $downloadedUrls as url}
+							{@const image = contentStorage.get(url)}
+							<div class="card">
+								<img src={image} alt="" />
+							</div>
+						{/each}
+					{:else}
+						<p class="text-center">There is no content here yet</p>
+					{/if}
+				{/if}
+			</svelte:fragment>
+		</TabGroup>
 	</div>
 </main>
 

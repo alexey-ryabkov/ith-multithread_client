@@ -35,10 +35,10 @@ import axios from 'axios';
 			setTimeout(() => response.data.resume(), loadSleepTime);
 		}
 	});
+	response.data.on('error', (/** @type {unknown} */ error) => {
+		parentPort?.postMessage({ threadNum, error });
+	});
 	response.data.on('end', () => {
 		parentPort?.close();
-	});
-	response.data.on('error', (/** @type {unknown} */ err) => {
-		parentPort?.postMessage({ threadNum, error: err instanceof Error ? err.message : err });
 	});
 })();

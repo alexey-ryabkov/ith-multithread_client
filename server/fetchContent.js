@@ -3,18 +3,17 @@ import axios from 'axios';
 import { Worker } from 'worker_threads';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { handleError, inErrorBoundary } from '../src/lib/utils/errorsHandling.js';
+// eslint-disable-next-line no-unused-vars -- import WebSocket just for right type for linter
+import WebSocket from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-let threadsCnt = 1;
-let speedLimit = 0;
-try {
-	({ maxThreads: threadsCnt, speedLimit } = JSON.parse(
-		fs.readFileSync(resolve(__dirname, './config.json'), 'utf-8')
-	));
-} catch (e) {
-	console.error(e);
-}
 
+const { maxThreads: threadsCnt = 1, speedLimit = 0 } = inErrorBoundary(
+	() => JSON.parse(fs.readFileSync(resolve(__dirname, './config.json'), 'utf-8')),
+	() => ({}),
+	(err) => handleError(err)
+);
 /**
  * @param {string} url
  * @param {WebSocket} ws
@@ -36,29 +35,36 @@ export default async function fetchContent(url, ws) {
 		});
 
 		worker.on('message', (data) => {
-			const { chunk, chunkSize, error: err = null } = data;
+			const { chunk, chunkSize, error } = data;
 			if (chunkSize) {
 				progress += chunkSize;
 				ws.send(
 					JSON.stringify({
 						chunk,
-						threadNum, 
+						threadNum,
 						progress,
 						totalSize,
 						threads: threadsCnt
 					})
 				);
-			} else if (err) {
-				ws.send(err instanceof Error ? JSON.stringify({ error: err.message }) : err);
+			} else if (error) {
+				handleErrorAndSend2client(error, ws, { threadNum });
 			}
 		});
-		worker.on('error', (err) => {
-			ws.send(JSON.stringify({ error: err.message }));
-		});
+		worker.on('error', (error) => handleErrorAndSend2client(error, ws));
 		worker.on('exit', (code) => {
 			if (code) {
-				ws.send(JSON.stringify({ error: `Server worker stopped, exit code ${code}` }));
+				handleErrorAndSend2client(`Server worker stopped, exit code ${code}`, ws);
 			}
 		});
 	}
+}
+/**
+ * @param {unknown} err
+ * @param {WebSocket} ws
+ * @param  {Object} [additional]
+ */
+export function handleErrorAndSend2client(err, ws, additional) {
+	ws.send(JSON.stringify({ error: err instanceof Error ? err.message : err, ...additional }));
+	handleError(err);
 }

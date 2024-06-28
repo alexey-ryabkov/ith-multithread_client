@@ -1,31 +1,38 @@
 import fs from 'fs';
-import { WebSocketServer } from 'ws';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import fetchContent from './fetchContent.js';
+import fetchContent, { handleErrorAndSend2client } from './fetchContent.js';
+import { inErrorBoundary } from '../src/lib/utils/errorsHandling.js';
+// eslint-disable-next-line no-unused-vars -- import WebSocket just for right type for linter
+import { WebSocketServer, WebSocket } from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-let urlsByKeywords;
-try {
-	urlsByKeywords = JSON.parse(fs.readFileSync(resolve(__dirname, './urls_by_keywords.json'), 'utf-8'));
-} catch (e) {
-	console.error(e);
-}
-
+/** @type string */
+const urlsByKeywords = inErrorBoundary(
+	() => JSON.parse(fs.readFileSync(resolve(__dirname, './urls_by_keywords.json'), 'utf-8')),
+	() => []
+);
 const server = new WebSocketServer({ port: 8080 });
-server.on('connection', (ws) => {
-	ws.on('message', (message) => {
-		// TODO JSON.parse в try? обработка ошибок на промисах?
-		// TODO первым запросом список ключевых слов?
-		const { keyword, url } = JSON.parse(message);
+server.on('connection', (/** @type WebSocket */ ws) => {
+	ws.on('message', (/** @type string */ message) => {
+		const { keyword, url } = inErrorBoundary(
+			() => JSON.parse(message),
+			() => ({}),
+			() => handleErrorAndSend2client('Keywords list is incorrect', ws)
+		);
 		if (keyword) {
 			const urls = urlsByKeywords[keyword] || [];
 			ws.send(JSON.stringify({ urls }));
 		} else if (url) {
-			fetchContent(url, ws);
+			inErrorBoundary(
+				() => fetchContent(url, ws),
+				null,
+				(err) => handleErrorAndSend2client(err, ws)
+			);
 		} else {
-			ws.send(JSON.stringify({ error: 'Incorrect query recieved' }));
+			handleErrorAndSend2client('Incorrect query recieved', ws);
 		}
 	});
+	ws.on('error', (err) => console.error(err.message));
 });

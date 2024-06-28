@@ -10,6 +10,8 @@
 	import { handleError, inErrorBoundary } from '$lib/utils/errorsHandling';
 
 	const WS_ADDRESS = 'localhost:8080';
+	const WS_PING_DELAY = 20000;
+	const WS_RECONNECT_DELAY = 1000;
 	const WS_CONN_FAILURE_CODE = 1006;
 	const ERR_TOAST_TIMEOUT = 10000;
 
@@ -20,6 +22,12 @@
 	const downloadedUrls = writable([]);
 	/** @type Writable */
 	const keywordUrls = writable([]);
+	/** @type {WebSocket} */
+	let ws;
+	/** @type {ContentStorage} */
+	let contentStorage;
+	/** @type {(Uint8Array|string)[][]} */
+	let contentChunks = [];
 
 	let keyword = '';
 	let keywordOfLoadedURLs = '';
@@ -32,7 +40,7 @@
 	let isUrlsLoading = false;
 	let isContentDownloading = false;
 	let tabSet = 0;
-	let noConnetion = false;
+	let noConnetion = true;
 
 	$: status = totalSize
 		? `Downloaded: ${formatBytes(progress)} of ${formatBytes(totalSize)} with ${threads} threads`
@@ -45,69 +53,10 @@
 	initializeStores();
 	const toastStore = getToastStore();
 
-	/** @type {WebSocket} */
-	let ws;
-	/** @type {ContentStorage} */
-	let contentStorage;
-	/** @type {(Uint8Array|string)[][]} */
-	let contentChunks = [];
-
 	onMount(() => {
 		contentStorage = ContentStorage.instance;
 		downloadedUrls.set(Array.from(contentStorage.keys));
-
-		ws = new WebSocket(`ws://${WS_ADDRESS}`);
-		ws.addEventListener('open', () => console.info('ws successfully opened'));
-		ws.addEventListener('message', ({ data: rawData }) => {
-			const data = inErrorBoundary(
-				() => JSON.parse(rawData),
-				() => ({}),
-				(err) => {
-					showError(err);
-					console.error(err);
-				}
-			);
-			const { urls, chunk, threadNum, error } = data;
-			({ progress = 0, totalSize = 0, threads = 0 } = data);
-			if (urls) {
-				keywordUrls.set(urls);
-				keywordOfLoadedURLs = keyword;
-				isUrlsLoading = false;
-			} else if (progress) {
-				if (!contentChunks[threadNum]) {
-					contentChunks[threadNum] = [];
-				}
-				contentChunks[threadNum].push(new Uint8Array(Object.values(chunk)));
-				if (progress == totalSize) {
-					contentStorage
-						.save(selectedUrl, new Blob(contentChunks.flat(), { type: 'image/jpeg' }))
-						.then(() => {
-							contentChunks = [];
-							isContentDownloading = false;
-							downloadedUrls.update((current) => [...current, selectedUrl]);
-						});
-				}
-			} else if (error) {
-				showError(error);
-				isUrlsLoading = false;
-			}
-		});
-		ws.addEventListener('close', (closeEvent) => {
-			const { wasClean, code, reason } = closeEvent;
-			if (!wasClean) {
-				if (code === WS_CONN_FAILURE_CODE) {
-					showError('WebSocket connection failed', false);
-					noConnetion = true;
-				} else {
-					console.warn(
-						`ws disconnected, code: ${code ?? 0}, reason: ${reason || 'no provided'}`,
-						closeEvent
-					);
-				}
-			} else {
-				console.info('ws manually closed', closeEvent);
-			}
-		});
+		wsOpen();
 	});
 
 	function loadUrls() {
@@ -139,6 +88,81 @@
 			message,
 			autohide
 		});
+	}
+	function wsOpen() {
+		if (
+			!ws ||
+			/** @type number[] */ ([WebSocket.CLOSED, WebSocket.CLOSING]).includes(ws.readyState)
+		) {
+			ws = new WebSocket(`ws://${WS_ADDRESS}`);
+			ws.addEventListener('open', () => {
+				noConnetion = false;
+				wsPing();
+				console.info('ws successfully opened');
+			});
+			ws.addEventListener('message', ({ data: rawData }) => {
+				const data = inErrorBoundary(
+					() => JSON.parse(rawData),
+					() => ({}),
+					(err) => {
+						showError(err);
+						console.error(err);
+					}
+				);
+				const { urls, chunk, threadNum, error, pong } = data;
+				if (pong) return;
+				({ progress = 0, totalSize = 0, threads = 0 } = data);
+				if (urls) {
+					keywordUrls.set(urls);
+					keywordOfLoadedURLs = keyword;
+					isUrlsLoading = false;
+				} else if (progress) {
+					if (!contentChunks[threadNum]) {
+						contentChunks[threadNum] = [];
+					}
+					contentChunks[threadNum].push(new Uint8Array(Object.values(chunk)));
+					if (progress == totalSize) {
+						contentStorage
+							.save(selectedUrl, new Blob(contentChunks.flat(), { type: 'image/jpeg' }))
+							.then(() => {
+								contentChunks = [];
+								isContentDownloading = false;
+								downloadedUrls.update((current) => [...current, selectedUrl]);
+							});
+					}
+				} else if (error) {
+					showError(error);
+					isUrlsLoading = false;
+				}
+			});
+			ws.addEventListener('close', (closeEvent) => {
+				noConnetion = true;
+				const { wasClean, code, reason } = closeEvent;
+				if (!wasClean) {
+					if (code === WS_CONN_FAILURE_CODE) {
+						showError('WebSocket connection failed', false);
+					} else {
+						console.warn(
+							`ws disconnected, code: ${code ?? 0}, reason: ${reason || 'no provided'}`,
+							closeEvent
+						);
+						setTimeout(wsOpen, WS_RECONNECT_DELAY);
+					}
+				} else {
+					console.info('ws manually closed', closeEvent);
+				}
+			});
+		}
+	}
+	function wsPing() {
+		setTimeout(() => {
+			if (
+				!(/** @type number[] */ ([WebSocket.CLOSED, WebSocket.CLOSING]).includes(ws.readyState))
+			) {
+				ws.send(JSON.stringify({ ping: true }));
+				wsPing();
+			}
+		}, WS_PING_DELAY);
 	}
 </script>
 
@@ -203,7 +227,7 @@
 							</p>
 						{/if}
 					{/if}
-					{#if isContentDownloading || status}
+					{#if status}
 						<ProgressRadial value={progressPercent} font={100}>{progressPercent}%</ProgressRadial>
 						<p>{status}</p>
 					{/if}

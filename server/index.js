@@ -16,7 +16,7 @@ const urlsByKeywords = inErrorBoundary(
 const server = new WebSocketServer({ port: 8080 });
 server.on('connection', (/** @type WebSocket */ ws) => {
 	ws.on('message', (/** @type string */ message) => {
-		const { keyword, url } = inErrorBoundary(
+		const { keyword, url, ping } = inErrorBoundary(
 			() => JSON.parse(message),
 			() => ({}),
 			() => handleErrorAndSend2client('Keywords list is incorrect', ws)
@@ -30,6 +30,8 @@ server.on('connection', (/** @type WebSocket */ ws) => {
 				null,
 				(err) => handleErrorAndSend2client(err, ws)
 			);
+		} else if (ping) {
+			ws.send(JSON.stringify({ pong: true }));
 		} else {
 			handleErrorAndSend2client('Incorrect query recieved', ws);
 		}

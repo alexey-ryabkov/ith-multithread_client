@@ -1,7 +1,15 @@
 <script>
 	import { onMount } from 'svelte';
 	import { writable } from 'svelte/store';
-	import { ListBox, ListBoxItem, ProgressRadial, Tab, TabGroup } from '@skeletonlabs/skeleton';
+	import {
+		ListBox,
+		ListBoxItem,
+		ProgressRadial,
+		Tab,
+		TabGroup,
+		TreeView,
+		TreeViewItem
+	} from '@skeletonlabs/skeleton';
 	import { Toast, getToastStore, initializeStores } from '@skeletonlabs/skeleton';
 	import Preloader from '$lib/components/Preloader.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -41,6 +49,7 @@
 	let isUrlsLoading = false;
 	let isContentDownloading = false;
 	let noConnetion = true;
+	let displayContent = '';	
 	let tabSet = 0;
 
 	$: status = totalSize
@@ -49,7 +58,7 @@
 			? 'Downloading starts'
 			: '';
 	$: progressPercent = totalSize ? Math.round((progress / totalSize) * 100) : 0;
-	$: contents = $downloadedUrls.map((url) => contentStorage.get(url));
+	$: contents = $downloadedUrls.map((url) => contentStorage.getItem(url));
 
 	initializeStores();
 	const toastStore = getToastStore();
@@ -198,7 +207,6 @@
 		<Tab bind:group={tabSet} name="tab2" value={1}>View content</Tab>
 		<svelte:fragment slot="panel">
 			{#if tabSet === 0}
-				<!-- <p>Enter keyword, for example <a href="#science">science</a></p> -->
 				<form class="input-group input-group-divider grid-cols-[1fr_auto] mx-auto mb-4 max-w-96">
 					<input
 						bind:value={keyword}
@@ -218,7 +226,11 @@
 					</button>
 				</form>
 				{#if keywordOfLoadedURLs && !isUrlsLoading}
-					<div class="{status ? 'flex flex-wrap gap-[5%]' : ''} w-full space-y-4">
+					<div
+						class="{status
+							? 'flex flex-wrap align-top gap-[5%]'
+							: ''} w-full sm:space-y-0 space-y-4"
+					>
 						<div class={status ? 'sm:w-[70%] w-full' : 'w-full'}>
 							{#if $keywordUrls.length}
 								<p class="indent-4 mb-2">
@@ -268,15 +280,34 @@
 				{/if}
 			{:else if tabSet === 1}
 				{#if contents.length}
-					{#each contents as image}
-						<div class="card">
-							<img src={image} alt="" />
-						</div>
-					{/each}
+					{#if displayContent}
+						<img
+							src={displayContent}
+							class="object-contain rounded-lg sm:w-4/5 w-full mx-auto mb-4"
+							alt=""
+						/>
+					{/if}
+					<div class="sm:w-4/5 w-full mx-auto mb-4">
+						<TreeView width="w-full" selection>
+							{#each Object.entries(contentStorage.keysByGroups) as [group, urls]}
+								<TreeViewItem>
+									<span class="font-bold">{group}</span>
+									<svelte:fragment slot="children">
+										{#each urls as url}
+											<TreeViewItem
+												on:click={() => (displayContent = contentStorage.getItem(url) ?? '')}
+												>{url}</TreeViewItem
+											>
+										{/each}
+									</svelte:fragment>
+								</TreeViewItem>
+							{/each}
+						</TreeView>
+					</div>
 					<button
 						on:click={clearContent}
 						type="button"
-						class="btn variant-filled btn-lg block w-28 mx-auto">Clear</button
+						class="btn variant-filled sm:btn-lg block mx-auto">Clear all</button
 					>
 				{:else}
 					<p class="text-center">There is no content here yet</p>
@@ -293,6 +324,12 @@
 	}
 	:global(.listbox-label-content) {
 		@apply overflow-hidden break-words;
+	}
+	:global(.tree-item-content) {
+		@apply overflow-hidden break-words;
+	}
+	:global(.tree-item-summary) {
+		@apply justify-center;
 	}
 	.gradient-heading {
 		@apply h1 font-sans text-center;

@@ -1,40 +1,26 @@
-ITHub 1 course practice
+# Учебная практика ITHub
 
-# create-svelte
+## О реализации
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/main/packages/create-svelte).
+- Для клиентской части используется фреймворк [SvelteKit](https://kit.svelte.dev/) и UI-toolkit [Skeleton](https://www.skeleton.dev/).
+- Код клиентской части в /src/routes/+page.svelte
+- Код серверной части в /server/
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```bash
-# create a new project in the current directory
-npm create svelte@latest
-
-# create a new project in my-app
-npm create svelte@latest my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Команды для запуска
 
 ```bash
+# установка проекта
+npm i
+
+# запуск в dev-режиме, по умолчанию проект запустится на http://localhost:5173/
 npm run dev
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+# запуск в production-режиме, по умолчанию проект запустится на http://localhost:4173/
+npm run start
 ```
 
-## Building
+## Прочая полезная информация
 
-To create a production version of your app:
-
-```bash
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+- Для сборки проекта нужна NodeJS >= 22
+- Для корректной работы проекта должен быть свободен порт 8080
+- Ключевые слова см. в /server/urls_by_keywords.json

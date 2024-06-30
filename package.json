@@ -2,18 +2,20 @@
   "name": "ith-multithread-client",
   "version": "0.0.1",
   "private": false,
+  "type": "module",
   "scripts": {
-    "serve": "nodemon server",
     "build": "vite build",
+    "start": "npm-run-all build -p serve preview",
+    "serve": "node server",
     "preview": "vite preview",
-    "dev": "npm-run-all --continue-on-error --parallel  dev:*",
-    "dev:serve": "npm run serve -- --inspect",
+    "dev": "npm-run-all -cp dev:*",
+    "dev:serve": "node server --inspect",
     "dev:client": "vite dev",    
     "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch",
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write ."
-  },
+  },  
   "devDependencies": {
     "@skeletonlabs/skeleton": "2.10.0",
     "@skeletonlabs/tw-plugin": "0.4.0",
@@ -35,13 +37,11 @@
     "svelte-check": "3.6.0",
     "tailwindcss": "3.4.4",
     "typescript": "5.3.3",
-    "vite": "^5.3.1",
+    "vite": "5.3.1",
     "vite-plugin-tailwind-purgecss": "0.3.3"
-  },
-  "type": "module",
+  },  
   "dependencies": {
     "axios": "1.7.2",
-    "nodemon": "3.1.4",
     "npm-run-all": "4.1.5",
     "ws": "8.17.1"
   }

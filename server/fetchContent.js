@@ -3,13 +3,18 @@ import axios from 'axios';
 import { Worker } from 'worker_threads';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { itemsSum } from '../src/lib/utils/index.js';
 import { handleError, inErrorBoundary } from '../src/lib/utils/errorsHandling.js';
 // eslint-disable-next-line no-unused-vars -- import WebSocket just for right type for linter
 import WebSocket from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const { maxThreads: threadsCnt = 1, speedLimit = 0 } = inErrorBoundary(
+const {
+	maxThreads: threadsCnt = 1,
+	speedLimit = 0,
+	speedLimits = []
+} = inErrorBoundary(
 	() => JSON.parse(fs.readFileSync(resolve(__dirname, './config.json'), 'utf-8')),
 	() => ({}),
 	(err) => handleError(err)
@@ -30,8 +35,12 @@ export default async function fetchContent(url, ws) {
 			from: threadNum * threadSize,
 			to: isLastThread ? totalSize - 1 : (threadNum + 1) * threadSize - 1
 		};
+		// if no limit is set for thread - part of total limit is taken
+		const treadSpeedLimit =
+			speedLimits?.[threadNum] ??
+			(Math.ceil((speedLimit - itemsSum(speedLimits)) / (threadsCnt - speedLimits.length)) || 0);
 		const worker = new Worker(resolve(__dirname, './downloadWorker.js'), {
-			workerData: { url, speedLimit: Math.ceil(speedLimit / threadsCnt), threadNum, range }
+			workerData: { url, speedLimit: treadSpeedLimit, threadNum, range }
 		});
 
 		worker.on('message', (data) => {

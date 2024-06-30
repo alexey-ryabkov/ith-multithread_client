@@ -1,4 +1,5 @@
 {
-  "maxThreads": 3,
-  "speedLimit": 51200
+	"maxThreads": 3,
+	"speedLimit": 102400,
+	"speedLimits": [51200, 25600, 12800]
 }

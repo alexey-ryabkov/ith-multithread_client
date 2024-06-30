@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * @param {number} bytes
  * @param {number} decimals
@@ -78,4 +79,10 @@ export function deepMerge(target, ...sources) {
 		}
 	}
 	return deepMerge(target, ...sources);
+}
+/**
+ * @param {number[]} items
+ */
+export function itemsSum(items) {
+	return items.reduce((sum, item) => sum + item, 0);
 }

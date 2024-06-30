@@ -22,6 +22,7 @@
 	const downloadedUrls = writable([]);
 	/** @type Writable */
 	const keywordUrls = writable([]);
+
 	/** @type {WebSocket} */
 	let ws;
 	/** @type {ContentStorage} */
@@ -39,8 +40,8 @@
 	let progressPercent = 0;
 	let isUrlsLoading = false;
 	let isContentDownloading = false;
-	let tabSet = 0;
 	let noConnetion = true;
+	let tabSet = 0;
 
 	$: status = totalSize
 		? `Downloaded: ${formatBytes(progress)} of ${formatBytes(totalSize)} with ${threads} threads`
@@ -89,6 +90,10 @@
 			autohide
 		});
 	}
+	function clearContent() {
+		contentStorage.clear();
+		downloadedUrls.set([]);
+	}
 	function wsOpen() {
 		if (
 			!ws ||
@@ -97,8 +102,8 @@
 			ws = new WebSocket(`ws://${WS_ADDRESS}`);
 			ws.addEventListener('open', () => {
 				noConnetion = false;
-				wsPing();
 				console.info('ws successfully opened');
+				wsPing();
 			});
 			ws.addEventListener('message', ({ data: rawData }) => {
 				const data = inErrorBoundary(
@@ -110,7 +115,14 @@
 					}
 				);
 				const { urls, chunk, threadNum, error, pong } = data;
+
+				if (error) {
+					showError(error);
+					isUrlsLoading = false;
+					return;
+				}
 				if (pong) return;
+
 				({ progress = 0, totalSize = 0, threads = 0 } = data);
 				if (urls) {
 					keywordUrls.set(urls);
@@ -123,16 +135,23 @@
 					contentChunks[threadNum].push(new Uint8Array(Object.values(chunk)));
 					if (progress == totalSize) {
 						contentStorage
-							.save(selectedUrl, new Blob(contentChunks.flat(), { type: 'image/jpeg' }))
+							.save(
+								selectedUrl,
+								new Blob(contentChunks.flat(), { type: 'image/jpeg' }),
+								keywordOfLoadedURLs
+							)
+							.catch((err) => {
+								showError(err);
+								console.error(err);
+							})
 							.then(() => {
 								contentChunks = [];
 								isContentDownloading = false;
 								downloadedUrls.update((current) => [...current, selectedUrl]);
 							});
 					}
-				} else if (error) {
-					showError(error);
-					isUrlsLoading = false;
+				} else {
+					console.warn('Unknown message recieved');
 				}
 			});
 			ws.addEventListener('close', (closeEvent) => {
@@ -140,7 +159,10 @@
 				const { wasClean, code, reason } = closeEvent;
 				if (!wasClean) {
 					if (code === WS_CONN_FAILURE_CODE) {
-						showError('WebSocket connection failed', false);
+						showError(
+							'WebSocket connection failed. Make sure the server is running and reload page.',
+							false
+						);
 					} else {
 						console.warn(
 							`ws disconnected, code: ${code ?? 0}, reason: ${reason || 'no provided'}`,
@@ -166,89 +188,112 @@
 	}
 </script>
 
-<main class="container h-full mx-auto flex justify-center items-center">
-	<div class="space-y-5">
-		<h1 class="gradient-heading">
-			HTTP<br />
-			multithread<br />
-			client
-		</h1>
-		<TabGroup justify="justify-center">
-			<Tab bind:group={tabSet} name="tab1" value={0}>Choose and Download</Tab>
-			<Tab bind:group={tabSet} name="tab2" value={1}>View content</Tab>
-			<svelte:fragment slot="panel">
-				{#if tabSet === 0}
-					<!-- <p>Enter keyword, for example <a href="#science">science</a></p> -->
-					<form class="input-group input-group-divider grid-cols-[1fr_auto]">
-						<input
-							bind:value={keyword}
-							disabled={isUrlsLoading || isContentDownloading || noConnetion}
-							type="text"
-							placeholder="Content URLs keyword"
-						/>
-						<button
-							on:click={loadUrls}
-							disabled={isUrlsLoading || isContentDownloading || noConnetion}
-							class="btn variant-filled-primary"
-						>
-							{#if isUrlsLoading}
-								<Preloader name="tubeSpinner" class="mr-1" />
-							{/if}
-							show
-						</button>
-					</form>
-					{#if keywordOfLoadedURLs && !isUrlsLoading}
-						{#if $keywordUrls.length}
-							<p>URLs list for <span class="font-bold">{keywordOfLoadedURLs}</span> keyword:</p>
-							<ListBox disabled={isContentDownloading || noConnetion}>
-								{#each $keywordUrls as url}
-									{@const isUrlDownloaded = $downloadedUrls.includes(url)}
-									<ListBoxItem
-										on:click={() => downloadContent(url)}
-										bind:group={selectedUrl}
-										name="urls"
-										value={url}
-										disabled={isUrlDownloaded}
-									>
-										<svelte:fragment slot="lead">
-											{#if !isUrlDownloaded}
-												<Icon name="download" size={20} />
-											{:else}
-												<Icon name="check" size={20} class="text-success-500" />
-											{/if}
-										</svelte:fragment>
-										{url}
-									</ListBoxItem>
-								{/each}
-							</ListBox>
-						{:else}
-							<p class="text-center">
-								No URLs for keyword <span class="font-bold">{keywordOfLoadedURLs}</span>.
-							</p>
+<main class="container mx-auto py-8 px-6 min-w-96">
+	<h1 class="gradient-heading mb-4">
+		Multithread<br />
+		Download Client
+	</h1>
+	<TabGroup justify="justify-center">
+		<Tab bind:group={tabSet} name="tab1" value={0}>Choose and Download</Tab>
+		<Tab bind:group={tabSet} name="tab2" value={1}>View content</Tab>
+		<svelte:fragment slot="panel">
+			{#if tabSet === 0}
+				<!-- <p>Enter keyword, for example <a href="#science">science</a></p> -->
+				<form class="input-group input-group-divider grid-cols-[1fr_auto] mx-auto mb-4 max-w-96">
+					<input
+						bind:value={keyword}
+						disabled={isUrlsLoading || isContentDownloading || noConnetion}
+						type="text"
+						placeholder="Content URLs keyword"
+					/>
+					<button
+						on:click={loadUrls}
+						disabled={isUrlsLoading || isContentDownloading || noConnetion}
+						class="btn variant-filled-primary"
+					>
+						{#if isUrlsLoading}
+							<Preloader name="tubeSpinner" class="mr-1" />
 						{/if}
-					{/if}
-					{#if status}
-						<ProgressRadial value={progressPercent} font={100}>{progressPercent}%</ProgressRadial>
-						<p>{status}</p>
-					{/if}
-				{:else if tabSet === 1}
-					{#if contents.length}
-						{#each contents as image}
-							<div class="card">
-								<img src={image} alt="" />
+						show
+					</button>
+				</form>
+				{#if keywordOfLoadedURLs && !isUrlsLoading}
+					<div class="{status ? 'flex flex-wrap gap-[5%]' : ''} w-full space-y-4">
+						<div class={status ? 'sm:w-[70%] w-full' : 'w-full'}>
+							{#if $keywordUrls.length}
+								<p class="indent-4 mb-2">
+									URLs list for <span class="font-bold">{keywordOfLoadedURLs}</span> keyword:
+								</p>
+								<div class="card p-4 text-token max-h-96 overflow-auto">
+									<ListBox disabled={isContentDownloading || noConnetion}>
+										{#each $keywordUrls as url}
+											{@const isUrlDownloaded = $downloadedUrls.includes(url)}
+											<ListBoxItem
+												on:click={() => downloadContent(url)}
+												bind:group={selectedUrl}
+												name="urls"
+												value={url}
+												disabled={isUrlDownloaded}
+											>
+												<svelte:fragment slot="lead">
+													{#if !isUrlDownloaded}
+														<Icon name="download" size={20} />
+													{:else}
+														<Icon name="check" size={20} class="text-success-500" />
+													{/if}
+												</svelte:fragment>
+												{url}
+											</ListBoxItem>
+										{/each}
+									</ListBox>
+								</div>
+							{:else}
+								<p class="text-center">
+									No URLs for keyword <span class="font-bold">{keywordOfLoadedURLs}</span>.
+								</p>
+							{/if}
+						</div>
+						{#if status}
+							<div class="sm:w-1/4 w-full">
+								<p class="text-center mb-2">Downloading:</p>
+								<div class="mb-2">
+									<ProgressRadial value={progressPercent} font={100} width="sm:w-full w-80 mx-auto"
+										>{progressPercent}%</ProgressRadial
+									>
+								</div>
+								<p class="text-center">{status}</p>
 							</div>
-						{/each}
-					{:else}
-						<p class="text-center">There is no content here yet</p>
-					{/if}
+						{/if}
+					</div>
 				{/if}
-			</svelte:fragment>
-		</TabGroup>
-		<Toast />
-	</div>
+			{:else if tabSet === 1}
+				{#if contents.length}
+					{#each contents as image}
+						<div class="card">
+							<img src={image} alt="" />
+						</div>
+					{/each}
+					<button
+						on:click={clearContent}
+						type="button"
+						class="btn variant-filled btn-lg block w-28 mx-auto">Clear</button
+					>
+				{:else}
+					<p class="text-center">There is no content here yet</p>
+				{/if}
+			{/if}
+		</svelte:fragment>
+	</TabGroup>
+	<Toast />
 </main>
 
 <style>
+	:global(.listbox-item) {
+		border-radius: var(--theme-rounded-container);
+	}
+	:global(.listbox-label-content) {
+		@apply overflow-hidden break-words;
+	}
 	.gradient-heading {
 		@apply h1 font-sans text-center;
 		@apply bg-clip-text text-transparent box-decoration-clone;
